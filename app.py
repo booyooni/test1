@@ -31,7 +31,7 @@ def initialize_engine(version):
 
 recommender, master, raw_df = initialize_engine(APP_VERSION)
 
-# 세션 상태 관리 (실시간 UI로 변경)
+# 세션 상태 관리 (Apply 버튼 기반 UI로 변경)
 if 'persona' not in st.session_state:
     st.session_state.persona = {
         'budget_str': '100~200만원',
@@ -43,47 +43,21 @@ if 'persona' not in st.session_state:
         'guide_style': '전문 지식형 (역사 중심)'
     }
 
-# --- [Dashboard Overview Section] ---
-st.markdown("### 📊 여행 추천 현황판")
+if 'applied_persona' not in st.session_state:
+    st.session_state.applied_persona = st.session_state.persona.copy()
 
-avg_price = raw_df['성인가격'].dropna().mean() if '성인가격' in raw_df.columns else 0
-avg_rating = raw_df['평점'].mean() if '평점' in raw_df.columns else 0
-product_count = master['상품코드'].nunique()
-city_counts = raw_df['대상도시'].value_counts()
-most_popular_city = city_counts.index[0] if not city_counts.empty else 'N/A'
-trend_city = max(recommender.external_trends, key=recommender.external_trends.get) if recommender.external_trends else 'N/A'
+if 'bookmarks' not in st.session_state:
+    st.session_state.bookmarks = []
 
-kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
-kpi_col1.metric("전체 상품 수", f"{product_count:,}개")
-kpi_col2.metric("평균 판매가", f"{avg_price/10000:,.1f}만원")
-kpi_col3.metric("평균 평점", f"{avg_rating:.2f}/5.0")
-kpi_col4.metric("인기 지역", most_popular_city)
+if 'is_loading' not in st.session_state:
+    st.session_state.is_loading = False
 
-st.markdown(f"""
-<div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(0, 212, 255, 0.15); border-radius: 18px; padding: 24px; margin-top: 20px;">
-    <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
-        <div style="flex: 1; min-width: 260px;">
-            <h4 style="color: #00D4FF; margin-bottom: 8px;">현재 추천 기준</h4>
-            <p style="color: #E0E0E0; margin: 0;">예산: <b>{st.session_state.persona['budget_str']}</b></p>
-            <p style="color: #E0E0E0; margin: 0;">여행 스타일: <b>{st.session_state.persona['style']}</b></p>
-            <p style="color: #E0E0E0; margin: 0;">동행자: <b>{st.session_state.persona['companion']}</b></p>
-        </div>
-        <div style="flex: 1; min-width: 260px;">
-            <h4 style="color: #00D4FF; margin-bottom: 8px;">데이터 인사이트</h4>
-            <p style="color: #E0E0E0; margin: 0;">외부 트렌드 최고 지역: <b>{trend_city}</b></p>
-            <p style="color: #E0E0E0; margin: 0;">추천 가능 상품 그룹: <b>{most_popular_city}</b> 중심</p>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# --- [Sidebar: Configuration Panel] ---
+with st.sidebar:
+    st.markdown("### 🎯 추천 옵션 설정")
+    st.markdown("---")
 
-st.markdown("### 🎯 추천 옵션 선택")
-st.markdown("아래 옵션을 변경하면 결과가 즉시 반영됩니다.")
-
-config_col1, config_col2, config_col3 = st.columns(3)
-config_col4, config_col5, config_col6 = st.columns(3)
-
-with config_col1:
+    # 옵션 선택
     budget_options = ["100만원 미만", "100~200만원", "200~300만원", "300만원 이상"]
     selected_budget = st.selectbox(
         "💰 여행 예산",
@@ -94,7 +68,6 @@ with config_col1:
     st.session_state.persona['budget_str'] = selected_budget
     st.session_state.persona['budget'] = 50 if "100만원 미만" in selected_budget else (150 if "100~200만원" in selected_budget else (250 if "200~300만원" in selected_budget else 350))
 
-with config_col2:
     companion_options = ["혼자", "커플·연인", "가족", "친구·지인"]
     selected_companion = st.selectbox(
         "🤝 동행자",
@@ -104,7 +77,6 @@ with config_col2:
     )
     st.session_state.persona['companion'] = selected_companion
 
-with config_col3:
     age_options = ["20대", "30대", "40대", "50대 이상"]
     selected_age = st.selectbox(
         "🎂 연령대",
@@ -114,7 +86,6 @@ with config_col3:
     )
     st.session_state.persona['age'] = selected_age
 
-with config_col4:
     style_options = ["휴양·힐링", "관광·명소", "미식·맛집", "쇼핑·도심"]
     selected_style = st.selectbox(
         "✈️ 여행 스타일",
@@ -124,7 +95,6 @@ with config_col4:
     )
     st.session_state.persona['style'] = selected_style
 
-with config_col5:
     stay_options = ["청결/위생", "수영장/부대시설", "조식 퀄리티", "접근성/위치"]
     selected_stay = st.selectbox(
         "🏢 숙소 중요도",
@@ -134,7 +104,6 @@ with config_col5:
     )
     st.session_state.persona['stay_value'] = selected_stay
 
-with config_col6:
     guide_options = ["전문 지식형 (역사 중심)", "친근 소통형 (배려 중심)"]
     selected_guide = st.selectbox(
         "🎙️ 가이드 스타일",
@@ -144,10 +113,72 @@ with config_col6:
     )
     st.session_state.persona['guide_style'] = selected_guide
 
-st.write("---")
+    st.markdown("---")
+
+    # Apply 버튼
+    if st.button("🚀 추천 결과 적용하기", use_container_width=True, type="primary"):
+        with st.spinner("🔄 추천 결과를 계산하고 있습니다..."):
+            import time
+            time.sleep(1)  # 시뮬레이션
+            st.session_state.is_loading = True
+            st.session_state.applied_persona = st.session_state.persona.copy()
+        st.success("✅ 추천 옵션이 적용되었습니다!")
+        st.rerun()
+
+    # 북마크 표시
+    if st.session_state.bookmarks:
+        st.markdown("---")
+        st.markdown(f"### 📌 북마크 ({len(st.session_state.bookmarks)}개)")
+        for i, bookmark in enumerate(st.session_state.bookmarks):
+            st.markdown(f"• {bookmark[:30]}...")
+
+if 'has_seen_guide' not in st.session_state:
+    st.session_state.has_seen_guide = False
+
+# 초기 가이드 표시
+if not st.session_state.has_seen_guide:
+    st.info("💡 **처음 방문하셨나요?**\n\n1. 왼쪽 사이드바에서 여행 옵션을 선택하세요\n2. '🚀 추천 결과 적용하기' 버튼을 클릭하세요\n3. 아래 탭에서 상세한 추천 결과를 확인하세요\n\n북마크 기능으로 마음에 드는 상품을 저장할 수 있습니다!")
+
+    if st.button("✅ 가이드 확인했습니다", key="guide_ack"):
+        st.session_state.has_seen_guide = True
+        st.rerun()
+
+    st.markdown("---")
+
+# --- [Main Dashboard Overview Section] ---
 
 # --- [Results Section] ---
-persona = st.session_state.persona
+persona = st.session_state.applied_persona
+
+# 추천 결과 요약 카드
+if st.session_state.applied_persona:
+    recs = recommender.rule_based_recommend(persona)
+    if not recs.empty:
+        top_product = recs.iloc[0]
+        price_str = f"{top_product['성인가격']:,.0f}원" if not pd.isna(top_product.get('성인가격')) else "가격 별도 문의"
+
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 123, 255, 0.1)); border: 2px solid #00D4FF; padding: 25px; border-radius: 20px; margin-bottom: 30px;">
+            <h3 style="color: #00D4FF; margin-top: 0; margin-bottom: 15px;">🎯 추천 결과 요약</h3>
+            <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 200px;">
+                    <h4 style="color: #FFFFFF; margin-bottom: 5px;">🏆 TOP 추천 상품</h4>
+                    <p style="color: #E0E0E0; margin: 0; font-size: 1.1em;"><b>{top_product['상품명'][:40]}...</b></p>
+                    <p style="color: #00D4FF; margin: 5px 0;">💰 {price_str} | ⭐ {top_product['평점']:.1f}</p>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <h4 style="color: #FFFFFF; margin-bottom: 5px;">📊 추천 통계</h4>
+                    <p style="color: #E0E0E0; margin: 0;">총 {len(recs)}개 상품 추천</p>
+                    <p style="color: #E0E0E0; margin: 0;">평균 평점: {recs['평점'].mean():.1f}/5.0</p>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <h4 style="color: #FFFFFF; margin-bottom: 5px;">📌 북마크</h4>
+                    <p style="color: #E0E0E0; margin: 0;">저장된 상품: {len(st.session_state.bookmarks)}개</p>
+                    <p style="color: #E0E0E0; margin: 0;">아래 상품들에서 💾 버튼을 클릭하세요</p>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # [v5.0 Summary Header]
 st.markdown(f"""
@@ -223,7 +254,7 @@ with tab1:
                 st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False}, key=f"impact_chart_{i}")
                 
                 # 사용자 피드백 수집
-                col_like, col_dislike = st.columns(2)
+                col_like, col_dislike, col_bookmark = st.columns(3)
                 with col_like:
                     if st.button(f"👍 Like #{ranks[i]}", key=f"like_{i}"):
                         if 'feedback' not in st.session_state:
@@ -236,6 +267,17 @@ with tab1:
                             st.session_state.feedback = {}
                         st.session_state.feedback[row['상품코드']] = 'dislike'
                         st.warning(f"#{ranks[i]} 상품을 싫어요로 평가했습니다!")
+                with col_bookmark:
+                    is_bookmarked = row['상품명'] in st.session_state.bookmarks
+                    button_text = "💾 북마크 해제" if is_bookmarked else "💾 북마크"
+                    button_type = "secondary" if is_bookmarked else "primary"
+                    if st.button(button_text, key=f"bookmark_{i}", type=button_type):
+                        if is_bookmarked:
+                            st.session_state.bookmarks.remove(row['상품명'])
+                            st.info(f"💾 '{row['상품명'][:20]}...' 북마크가 해제되었습니다.")
+                        else:
+                            st.session_state.bookmarks.append(row['상품명'])
+                            st.success(f"💾 '{row['상품명'][:20]}...' 북마크에 추가되었습니다!")
 
 with tab2:
         st.subheader("🔍 Integrated Discovery & Itinerary Explorer")
