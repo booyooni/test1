@@ -4,6 +4,235 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime
+import seaborn as sns
+import matplotlib.pyplot as plt
+from utils import load_processed_data
+
+# 다크 테마 공통 설정
+PLOTLY_TEMPLATE = "plotly_dark"
+CHART_COLOR = "#00D4FF"
+
+def create_comprehensive_eda_dashboard():
+    """종합적인 EDA 대시보드 생성"""
+    st.markdown("### 📊 Comprehensive EDA Dashboard")
+    st.markdown("현재 보유한 모든 CSV 데이터를 기반으로 한 탐색적 데이터 분석")
+
+    try:
+        # 데이터 로드
+        with st.spinner("데이터 로딩 중..."):
+            df = load_processed_data()
+
+        # 기본 정보 표시
+        st.markdown("#### 📋 Dataset Overview")
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("총 레코드 수", f"{len(df):,}")
+        with col2:
+            st.metric("총 컬럼 수", len(df.columns))
+        with col3:
+            st.metric("대상 도시 수", df['대상도시'].nunique())
+        with col4:
+            st.metric("상품 수", df['상품코드'].nunique())
+
+        st.markdown("---")
+
+        # 데이터 타입 및 결측치 분석
+        st.markdown("#### 🔍 Data Structure Analysis")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**데이터 타입 분포**")
+            dtype_counts = df.dtypes.value_counts()
+            fig_dtype = px.pie(values=dtype_counts.values, names=dtype_counts.index.astype(str),
+                             template=PLOTLY_TEMPLATE, title="Data Types Distribution")
+            fig_dtype.update_layout(showlegend=True)
+            st.plotly_chart(fig_dtype, use_container_width=True)
+
+        with col2:
+            st.markdown("**결측치 분석**")
+            missing_data = df.isnull().sum()
+            missing_pct = (missing_data / len(df) * 100).round(2)
+            missing_df = pd.DataFrame({
+                'Column': missing_data.index,
+                'Missing Count': missing_data.values,
+                'Missing %': missing_pct.values
+            }).sort_values('Missing %', ascending=False)
+
+            # 결측치가 있는 컬럼만 표시
+            missing_df = missing_df[missing_df['Missing Count'] > 0]
+
+            if not missing_df.empty:
+                fig_missing = px.bar(missing_df.head(10), x='Missing %', y='Column', orientation='h',
+                                   template=PLOTLY_TEMPLATE, title="Missing Values by Column (Top 10)")
+                fig_missing.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_missing, use_container_width=True)
+            else:
+                st.success("🎉 결측치가 발견되지 않았습니다!")
+
+        st.markdown("---")
+
+        # 수치형 변수 분석
+        st.markdown("#### 📈 Numerical Variables Analysis")
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+
+        if len(numeric_cols) > 0:
+            # 상관관계 히트맵
+            st.markdown("**수치형 변수 상관관계**")
+            corr_matrix = df[numeric_cols].corr()
+
+            fig_corr = px.imshow(corr_matrix, text_auto=".2f", aspect="auto",
+                               labels=dict(color="Correlation"),
+                               color_continuous_scale='RdBu_r', template=PLOTLY_TEMPLATE,
+                               title="Correlation Matrix")
+            st.plotly_chart(fig_corr, use_container_width=True)
+
+            # 주요 수치형 변수 분포
+            st.markdown("**주요 수치형 변수 분포**")
+            key_numeric_cols = ['평점', 'sentiment_score', '성인가격']
+
+            for col in key_numeric_cols:
+                if col in df.columns:
+                    fig = px.histogram(df, x=col, nbins=50, template=PLOTLY_TEMPLATE,
+                                     title=f"{col} Distribution", marginal="box")
+                    fig.update_layout(showlegend=False)
+                    st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+
+        # 범주형 변수 분석
+        st.markdown("#### 🏷️ Categorical Variables Analysis")
+
+        categorical_cols = ['대상도시', '상품형태', 'price_group', 'sentiment_label', 'label_korean']
+
+        for col in categorical_cols:
+            if col in df.columns:
+                st.markdown(f"**{col} 분포**")
+
+                # 카운트 플롯
+                value_counts = df[col].value_counts().head(10)  # 상위 10개만
+                fig = px.bar(x=value_counts.index, y=value_counts.values,
+                           template=PLOTLY_TEMPLATE, title=f"{col} Distribution")
+                fig.update_layout(xaxis_title=col, yaxis_title="Count")
+                st.plotly_chart(fig, use_container_width=True)
+
+                # 퍼센트 표시
+                total = len(df)
+                pct_df = (value_counts / total * 100).round(1)
+                st.write(f"상위 10개 카테고리 비율: {dict(pct_df)}")
+
+        st.markdown("---")
+
+        # 도시별 분석
+        st.markdown("#### 🌍 City-wise Analysis")
+
+        city_cols = ['대상도시']
+        if len(city_cols) > 0:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**도시별 상품 수**")
+                city_product_count = df.groupby('대상도시')['상품코드'].nunique().sort_values(ascending=False)
+                fig_city_products = px.bar(x=city_product_count.index, y=city_product_count.values,
+                                         template=PLOTLY_TEMPLATE, title="Products by City")
+                st.plotly_chart(fig_city_products, use_container_width=True)
+
+            with col2:
+                st.markdown("**도시별 평균 평점**")
+                city_avg_rating = df.groupby('대상도시')['평점'].mean().sort_values(ascending=False)
+                fig_city_rating = px.bar(x=city_avg_rating.index, y=city_avg_rating.values,
+                                       template=PLOTLY_TEMPLATE, title="Average Rating by City")
+                fig_city_rating.update_layout(yaxis_range=[0, 5])
+                st.plotly_chart(fig_city_rating, use_container_width=True)
+
+        # 도시별 가격 분포
+        if '성인가격' in df.columns and '대상도시' in df.columns:
+            st.markdown("**도시별 가격 분포**")
+            fig_price_city = px.box(df, x='대상도시', y='성인가격', template=PLOTLY_TEMPLATE,
+                                  title="Price Distribution by City")
+            st.plotly_chart(fig_price_city, use_container_width=True)
+
+        st.markdown("---")
+
+        # 감성 분석 결과
+        st.markdown("#### 💭 Sentiment Analysis Results")
+
+        if 'sentiment_label' in df.columns:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**감성 분포**")
+                sentiment_counts = df['sentiment_label'].value_counts()
+                fig_sentiment = px.pie(values=sentiment_counts.values, names=sentiment_counts.index,
+                                     template=PLOTLY_TEMPLATE, title="Sentiment Distribution")
+                st.plotly_chart(fig_sentiment, use_container_width=True)
+
+            with col2:
+                st.markdown("**감성 점수 분포**")
+                if 'sentiment_score' in df.columns:
+                    fig_sentiment_score = px.histogram(df, x='sentiment_score', nbins=50,
+                                                     template=PLOTLY_TEMPLATE,
+                                                     title="Sentiment Score Distribution")
+                    st.plotly_chart(fig_sentiment_score, use_container_width=True)
+
+        # 감성별 평균 평점
+        if 'sentiment_label' in df.columns and '평점' in df.columns:
+            st.markdown("**감성별 평균 평점**")
+            sentiment_rating = df.groupby('sentiment_label')['평점'].mean().round(2)
+            fig_sentiment_rating = px.bar(x=sentiment_rating.index, y=sentiment_rating.values,
+                                        template=PLOTLY_TEMPLATE, title="Average Rating by Sentiment")
+            fig_sentiment_rating.update_layout(yaxis_range=[0, 5])
+            st.plotly_chart(fig_sentiment_rating, use_container_width=True)
+
+        st.markdown("---")
+
+        # 가격 그룹 분석
+        if 'price_group' in df.columns:
+            st.markdown("#### 💰 Price Group Analysis")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**가격 그룹 분포**")
+                price_group_counts = df['price_group'].value_counts()
+                fig_price_group = px.pie(values=price_group_counts.values, names=price_group_counts.index,
+                                       template=PLOTLY_TEMPLATE, title="Price Group Distribution")
+                st.plotly_chart(fig_price_group, use_container_width=True)
+
+            with col2:
+                st.markdown("**가격 그룹별 평균 평점**")
+                price_rating = df.groupby('price_group')['평점'].mean().round(2)
+                fig_price_rating = px.bar(x=price_rating.index, y=price_rating.values,
+                                        template=PLOTLY_TEMPLATE, title="Average Rating by Price Group")
+                fig_price_rating.update_layout(yaxis_range=[0, 5])
+                st.plotly_chart(fig_price_rating, use_container_width=True)
+
+        st.markdown("---")
+
+        # 데이터 품질 요약
+        st.markdown("#### ✅ Data Quality Summary")
+
+        quality_metrics = {
+            "총 레코드 수": f"{len(df):,}",
+            "결측치 비율": f"{(df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100):.2f}%",
+            "중복 레코드": f"{df.duplicated().sum():,}",
+            "수치형 컬럼 수": len(numeric_cols),
+            "범주형 컬럼 수": len(df.select_dtypes(include=['object']).columns),
+            "날짜 컬럼 수": len(df.select_dtypes(include=['datetime']).columns)
+        }
+
+        # 3열로 나누어 표시
+        cols = st.columns(3)
+        for i, (metric, value) in enumerate(quality_metrics.items()):
+            cols[i % 3].metric(metric, value)
+
+        st.markdown("---")
+        st.success("🎉 EDA 분석이 완료되었습니다! 위의 차트들을 통해 데이터의 구조와 특성을 파악하실 수 있습니다.")
+
+    except Exception as e:
+        st.error(f"데이터 로딩 중 오류가 발생했습니다: {str(e)}")
+        st.info("utils.py의 load_processed_data() 함수를 확인해주세요.")
 
 # 다크 테마 공통 설정
 PLOTLY_TEMPLATE = "plotly_dark"

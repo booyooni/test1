@@ -6,7 +6,7 @@ from datetime import datetime
 from utils import load_processed_data, get_product_master, build_content_engine, build_collaborative_clusters, load_external_trends
 from recommender import TravelRecommender
 from styles import apply_vacation_theme
-from analytics import render_logic_explanation, show_deep_eda_v5
+from analytics import render_logic_explanation, show_deep_eda_v5, create_comprehensive_eda_dashboard
 
 # [v5.2.0] Fair & Deep Engine (Keyword Match Analysis)
 APP_VERSION = "5.3.0"
@@ -201,7 +201,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4 = st.tabs(["🎯 Ranked Recommendation", "🔍 Product Browser", "📊 Analytics Mastery", "🗺️ Destination Map"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎯 Ranked Recommendation", "🔍 Product Browser", "📊 Analytics Mastery", "🗺️ Destination Map", "📈 EDA Dashboard"])
 
 with tab1:
         st.subheader("🎯 v5.5 Integrated Price & Itinerary Engine")
@@ -388,6 +388,10 @@ with tab4:
         
         # Streamlit에 지도 표시
         st_folium(m, width=700, height=500)
+
+with tab5:
+        st.subheader("📈 Comprehensive EDA Dashboard")
+        create_comprehensive_eda_dashboard()
 
 # [Luxury Footer]
 st.markdown(f"""

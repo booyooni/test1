@@ -7,3 +7,5 @@ koreanize-matplotlib
 statsmodels
 folium
 streamlit-folium
+seaborn
+matplotlib
